@@ -22,6 +22,10 @@ void ConfigureDac(void);
 void ConfigureAdc(void);
 void ConfigureTimer(void);
 
+Uint16 sineWave(float time);
+Uint16 squareWave(float time, float signal_period);
+Uint16 triangleWave(float time, float signal_period);
+
 void Init(void) {
     ConfigureGpio();
     ConfigureDac();
@@ -35,8 +39,8 @@ void TimerCallback(void) {
     static const float signal_period = 1.f/SIGNAL_FREQ;
 
     GpioDataRegs.GPATOGGLE.bit.GPIO31 = 1;
-    DacaRegs.DACVALS.all = (uint16_t)(2048 + 2000 * sin(2 * 3.141592 * 100 * time));
-    DacbRegs.DACVALS.all = (uint16_t)(2048 + 2000 * sin(2 * 3.141592 * 200 * time));
+    DacaRegs.DACVALS.all = sineWave(time);
+    DacbRegs.DACVALS.all = triangleWave(time, signal_period);
 
     time += delta_time;
     if(time > signal_period)
@@ -127,5 +131,30 @@ __interrupt void cpu_timer0_isr(void) {
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP1;
 }
 
+Uint16 squareWave(float time, float signal_period) {
+    if(time <= signal_period/2)
+        return DAC_MIN_VALUE;
+    else if(time <= signal_period)
+        return DAC_MAX_VALUE;
+    else
+        return 0; // ERROR CASE
+}
 
+Uint16 triangleWave(float time, float signal_period) {
+    static const float slope = (DAC_MAX_VALUE - DAC_MIN_VALUE)*SIGNAL_FREQ*2;
 
+    if(time <= signal_period/2)
+        return (Uint16)(DAC_MIN_VALUE + slope*time);
+    else if (time <= signal_period)
+        return (Uint16)(DAC_MAX_VALUE - slope*(time-(signal_period/2)));
+    else
+        return 0; // ERROR CASE
+}
+
+Uint16 sineWave(float time) {
+    static const float amplitude = (DAC_MAX_VALUE - DAC_MIN_VALUE)/2,
+                       offset = DAC_FULL_SCALE/2,
+                       w = 2*PI*SIGNAL_FREQ;
+
+    return (Uint16)(amplitude*sin(w*time) + offset);
+}
